@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import NotificationBell from './NotificationBell';
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -18,6 +19,9 @@ const Navbar = () => {
         <Link to="/selfcare" style={styles.link}>Self-Care</Link>
         <Link to="/appointments" style={styles.link}>Appointments</Link>
         <Link to="/profile" style={styles.link}>Profile</Link>
+        <Link to="/analytics" style={styles.link}>Analytics</Link>
+        <Link to="/sos" style={styles.sos}>SOS</Link>
+        <NotificationBell />
         <button onClick={handleLogout} style={styles.logout}>Logout</button>
       </div>
     </nav>
@@ -49,6 +53,12 @@ const styles = {
     color: '#003f5c',
     textDecoration: 'none',
     fontSize: '15px'
+  },
+  sos: {
+    color: '#d32f2f',
+    textDecoration: 'none',
+    fontSize: '15px',
+    fontWeight: 'bold'
   },
   logout: {
     backgroundColor: '#ffffff',

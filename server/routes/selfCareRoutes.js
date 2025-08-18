@@ -1,8 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { markTaskCompleted, getTodayTasks } = require('../controllers/selfCareController');
+const authenticateToken = require('../middleware/auth');
 
-router.post('/complete', markTaskCompleted); // POST /api/selfcare/complete
-router.get('/:userId', getTodayTasks);       // GET /api/selfcare/:userId
+// ✅ Log self-care task (secure)
+router.post('/complete', authenticateToken, markTaskCompleted);
+
+// ✅ Get today's self-care tasks for authenticated user
+router.get('/today', authenticateToken, getTodayTasks);
 
 module.exports = router;

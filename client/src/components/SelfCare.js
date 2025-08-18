@@ -20,39 +20,18 @@ const affirmations = [
 const moods = ['😊 Peaceful', '💪 Energized', '😌 Grounded', '😣 Tense', '🥱 Tired'];
 
 const SelfCare = () => {
-  const [userId, setUserId] = useState('');
-  // const [completed, setCompleted] = useState({});
   const [step, setStep] = useState('');
   const [timer, setTimer] = useState(null);
   const [affirmation, setAffirmation] = useState('');
   const [mood, setMood] = useState('');
-  const [breathPhase, setBreathPhase] = useState('in'); // 'in', 'hold', or 'out'
-  const [breathCount, setBreathCount] = useState(0); // Number of cycles
+  const [breathPhase, setBreathPhase] = useState('in');
+  const [breathCount, setBreathCount] = useState(0);
 
-  // Get user ID
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      const decoded = jwtDecode(token);
-      setUserId(decoded.id);
-      // fetchCompletedTasks(decoded.id); // No longer needed for repeatable tasks
-    }
-  }, []);
-
-  // const fetchCompletedTasks = async (id) => {
-  //   const res = await axios.get(`http://localhost:5000/api/selfcare/${id}`);
-  //   const map = {};
-  //   res.data.forEach(t => { map[t.taskType] = true; });
-  //   setCompleted(map);
-  // };
-
-  // Use refs to avoid interval/phase glitches
   const intervalRef = useRef(null);
   const phaseRef = useRef('in');
   const countRef = useRef(0);
 
   useEffect(() => {
-    // Cleanup interval on unmount or when starting a new task
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -62,23 +41,24 @@ const SelfCare = () => {
   }, []);
 
   const handleTaskStart = (task) => {
-    // Clear any previous interval
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
+
     setStep(task);
     setAffirmation('');
+
     if (task === 'hydration') {
       markTask(task);
     } else if (task === 'breathing') {
-      // Breathing: 3 cycles of 4s in, 3s hold, 4s out
       setBreathPhase('in');
       setBreathCount(0);
       setTimer(4);
       phaseRef.current = 'in';
       countRef.current = 0;
       let timeLeft = 4;
+
       intervalRef.current = setInterval(() => {
         timeLeft -= 1;
         setTimer(timeLeft);
@@ -101,8 +81,8 @@ const SelfCare = () => {
               intervalRef.current = null;
               setTimer(null);
               setBreathPhase('in');
-              setAffirmation(affirmations[Math.floor(Math.random() * affirmations.length)]);
-              markTask('breathing'); // Only mark as complete after all cycles
+              setAffirmation(randomAffirmation());
+              markTask('breathing');
               return;
             }
             phaseRef.current = 'in';
@@ -116,6 +96,7 @@ const SelfCare = () => {
       const duration = task === 'exercise' ? 300 : task === 'meditation' ? 180 : 18;
       let timeLeft = duration;
       setTimer(timeLeft);
+
       intervalRef.current = setInterval(() => {
         timeLeft -= 1;
         setTimer(timeLeft);
@@ -123,16 +104,27 @@ const SelfCare = () => {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
           setTimer(null);
-          setAffirmation(affirmations[Math.floor(Math.random() * affirmations.length)]);
-          markTask(task); // Only mark as complete after timer finishes
+          setAffirmation(randomAffirmation());
+          markTask(task);
         }
       }, 1000);
     }
   };
 
+  const randomAffirmation = () => {
+    return affirmations[Math.floor(Math.random() * affirmations.length)];
+  };
+
   const markTask = async (taskType) => {
-    await axios.post('http://localhost:5000/api/selfcare/complete', { userId, taskType });
-    // No longer updating completed state, so tasks can be repeated
+    try {
+      await axios.post('/api/selfcare/complete', { taskType }, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+    } catch (err) {
+      console.error('Failed to mark self-care task:', err);
+    }
   };
 
   return (
@@ -162,6 +154,7 @@ const SelfCare = () => {
           <div style={styles.breathCycle}>Cycle {breathCount + 1} of 3</div>
         </div>
       )}
+
       {step && timer !== null && step !== 'breathing' && (
         <div style={styles.timer}>
           ⏳ {step.toUpperCase()} — {timer}s left
@@ -175,7 +168,7 @@ const SelfCare = () => {
       )}
 
       <div style={{ marginTop: '30px' }}>
-      <h4><span role="img" aria-label="cherry-blossom">🌸</span> How do you feel now?</h4>
+        <h4><span role="img" aria-label="cherry-blossom">🌸</span> How do you feel now?</h4>
         <div style={styles.moodRow}>
           {moods.map(m => (
             <button

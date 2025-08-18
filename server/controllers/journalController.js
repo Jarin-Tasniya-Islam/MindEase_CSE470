@@ -1,10 +1,15 @@
 const JournalEntry = require('../models/JournalEntry');
+const createNotification = require('../utils/createNotification');
 
 // CREATE a journal entry
 exports.createEntry = async (req, res) => {
   try {
     const entry = new JournalEntry(req.body);
     await entry.save();
+
+    // Trigger notification
+    await createNotification(req.body.userId, 'journal', '📝 Don’t forget to journal today!');
+
     res.status(201).json({ message: 'Journal saved', entry });
   } catch (err) {
     res.status(500).json({ message: 'Error saving journal', error: err.message });
