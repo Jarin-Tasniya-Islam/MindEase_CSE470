@@ -14,7 +14,11 @@ const Login = () => {
     e.preventDefault();
     try {
       const res = await axios.post('http://localhost:5000/api/users/login', form);
+      // const res = await axios.post('/api/users/login', { email, password });
+
       localStorage.setItem('token', res.data.token);
+      localStorage.setItem('role', res.data.role || 'user');
+
       alert(`Welcome ${res.data.name}`);
       navigate('/profile'); // ✅ Redirect to profile page
     } catch (err) {

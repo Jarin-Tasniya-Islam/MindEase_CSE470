@@ -7,7 +7,10 @@ const NotificationBell = () => {
 
   useEffect(() => {
     fetchNotifications();
+    const id = setInterval(fetchNotifications, 60000); // every 60s
+    return () => clearInterval(id);
   }, []);
+
 
   const fetchNotifications = async () => {
     try {

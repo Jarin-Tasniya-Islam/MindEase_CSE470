@@ -41,31 +41,30 @@ const JournalForm = () => {
     e.preventDefault();
     try {
       const payload = {
-        userId: form.userId,
+        userId: form.userId, // back-compat; backend now also uses req.user
         content: form.content,
         entryType: form.entryType,
-        // avatar: form.avatar,
         font: form.font,
         theme: form.theme,
         language: form.language,
         date: new Date()
       };
 
-      await axios.post('http://localhost:5000/api/journal', payload);
+      const token = localStorage.getItem('token');
+      await axios.post('/api/journal', payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
       const msg = appreciationMessages[Math.floor(Math.random() * appreciationMessages.length)];
       setAppreciation(msg);
-      setForm(prev => ({
-        ...prev,
-        content: '',
-        entryType: '',
-        // avatar: ''
-      }));
+      setForm(prev => ({ ...prev, content: '', entryType: '' }));
     } catch (err) {
       console.error(err.response?.data || err.message);
       setAppreciation('');
       alert('Error saving entry');
     }
   };
+
 
   return (
     <div style={{ ...styles.container, fontFamily: form.font, backgroundColor: form.theme === 'lightblue' ? '#e6f4fa' : '#fff9f0' }}>

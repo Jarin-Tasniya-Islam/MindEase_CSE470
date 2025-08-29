@@ -1,19 +1,42 @@
-import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import NotificationBell from './NotificationBell';
 
 const Navbar = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const getRole = () => localStorage.getItem('role') || 'user';
+  const [role, setRole] = useState(getRole);
+
+  // ✅ Update role whenever route changes or storage changes
+  useEffect(() => {
+    setRole(getRole());
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const syncRole = () => setRole(getRole());
+    window.addEventListener('storage', syncRole);
+    return () => window.removeEventListener('storage', syncRole);
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('role');
     navigate('/');
   };
 
   return (
     <nav style={styles.navbar}>
-      <div style={styles.brand}>MindEase <span role="img" aria-label="sparkle">✨</span></div>
+      <div style={styles.brand}>
+        MindEase <span role="img" aria-label="sparkle">✨</span>
+      </div>
       <div style={styles.links}>
+        {/* 👇 Only show if role is admin */}
+        {role === 'admin' && <Link to="/admin" style={styles.link}>Admin</Link>}
+        {role === 'admin' && <Link to="/admin/moderation" style={styles.link}>Moderation</Link>}
+        {role === 'admin' && <Link to="/admin/appointments" style={styles.link}>Appointments</Link>}
+
         <Link to="/mood" style={styles.link}>Mood Tracker</Link>
         <Link to="/journal" style={styles.link}>Journal</Link>
         <Link to="/selfcare" style={styles.link}>Self-Care</Link>
@@ -30,7 +53,7 @@ const Navbar = () => {
 
 const styles = {
   navbar: {
-    backgroundColor: '#d0eaff', // 💙 Light blue
+    backgroundColor: '#d0eaff',
     padding: '15px 30px',
     color: '#003f5c',
     display: 'flex',

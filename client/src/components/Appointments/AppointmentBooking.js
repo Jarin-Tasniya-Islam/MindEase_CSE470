@@ -1,152 +1,146 @@
-import React, { useState, useEffect } from 'react';
+// client/src/components/Appointments/AppointmentBooking.js
+import React, { useEffect, useState } from 'react';
+import { bookAppointment } from '../../api/appointments';
 import axios from 'axios';
 
-const AppointmentBooking = () => {
-    const [formData, setFormData] = useState({
-        name: '',
-        type: '',
-        date: '',
-        time: '',
-    });
+const CSS = `
+.appt-wrap { max-width: 560px; margin: 28px auto; font-family: Segoe UI, system-ui, sans-serif; }
+.card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:18px; box-shadow: 0 4px 18px rgba(0,0,0,0.04); }
+.h { font-size:20px; margin:0 0 12px 0; color:#0b3954; }
+.sub { margin:0 0 18px 0; color:#475569; font-size:13px; }
+.form-row { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+.label { font-size:13px; color:#555; }
+.input, .select, .textarea { padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px; }
+.inline { display:flex; gap:10px; }
+.tip { font-size:12px; color:#64748b; margin-top:2px; }
+.btn { width:100%; padding:12px; font-weight:600; border-radius:10px; border:1px solid #075985; background:#0ea5e9; color:#fff; cursor:pointer; }
+.btn:disabled { opacity:0.6; cursor:not-allowed; }
+`;
+
+export default function AppointmentBooking() {
     const [supportPersons, setSupportPersons] = useState([]);
+    const [supportPersonId, setSupportPersonId] = useState('');
+    const [name, setName] = useState('');   // ✅ NEW
+    const [date, setDate] = useState('');
+    const [time, setTime] = useState('');
+    const [note, setNote] = useState('');
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        const fetchSupportPersons = async () => {
+        (async () => {
             try {
-                const response = await axios.get('/api/support-persons');
-                setSupportPersons(response.data);
-            } catch (error) {
-                console.error('Failed to fetch support persons:', error);
+                const base = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+                const { data } = await axios.get(`${base}/api/support-persons`);
+                setSupportPersons(Array.isArray(data) ? data : []);
+                if (data?.[0]?._id) setSupportPersonId(data[0]._id);
+            } catch (e) {
+                console.error('Failed to load support persons', e?.response?.data || e.message);
             }
-        };
-        fetchSupportPersons();
+        })();
     }, []);
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData({ ...formData, [name]: value });
+    const buildISO = (d, t) => {
+        const dt = new Date(`${d}T${t}:00`);
+        return Number.isNaN(dt.getTime()) ? null : dt.toISOString();
     };
 
-    const handleSubmit = async (e) => {
+    const submit = async (e) => {
         e.preventDefault();
+        if (!supportPersonId || !date || !time) {
+            alert('Please select support person, date and time.');
+            return;
+        }
+        const when = buildISO(date, time);
+        if (!when) return alert('Invalid date/time.');
+
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.post('/api/appointments', {
-                supportPersonId: formData.type,
-                date: `${formData.date}T${formData.time}:00`,
-                note: `Booked by ${formData.name}`,
-            }, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-            alert(`Appointment booked successfully: ${response.data}`);
-        } catch (error) {
-            alert(`Failed to book appointment: ${error.response?.data?.error || error.message}`);
+            setLoading(true);
+            // ✅ Include the typed-in name by prepending it to the note
+            const finalNote = name ? `Name: ${name}\n${note}` : note;
+            await bookAppointment({ supportPersonId, date: when, note: finalNote });
+            alert('Appointment request sent!');
+            setName('');
+            setNote('');
+        } catch (err) {
+            const msg = err?.response?.data?.message || err.message;
+            alert('Failed to book appointment: ' + msg);
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
-        <div style={styles.container}>
-            <h1 style={styles.heading}>Book an Appointment</h1>
-            <form onSubmit={handleSubmit} style={styles.form}>
-                <div style={styles.fieldContainer}>
-                    <label style={styles.label}>Name:</label>
-                    <input
-                        type="text"
-                        name="name"
-                        value={formData.name}
-                        onChange={handleChange}
-                        required
-                        style={styles.input}
-                    />
-                </div>
-                <div style={styles.fieldContainer}>
-                    <label style={styles.label}>Support Person:</label>
-                    <select name="type" value={formData.type} onChange={handleChange} required style={styles.input}>
-                        <option value="">Select Support Person</option>
-                        {supportPersons.map(person => (
-                            <option key={person._id} value={person._id}>
-                                {person.name} ({person.title})
-                            </option>
-                        ))}
-                    </select>
-                </div>
-                <div style={styles.fieldContainer}>
-                    <label style={styles.label}>Date:</label>
-                    <input
-                        type="date"
-                        name="date"
-                        value={formData.date}
-                        onChange={handleChange}
-                        required
-                        style={styles.input}
-                    />
-                </div>
-                <div style={styles.fieldContainer}>
-                    <label style={styles.label}>Time:</label>
-                    <input
-                        type="time"
-                        name="time"
-                        value={formData.time}
-                        onChange={handleChange}
-                        required
-                        style={styles.input}
-                    />
-                </div>
-                <button type="submit" style={styles.button}>Book Appointment</button>
-            </form>
+        <div className="appt-wrap">
+            <style>{CSS}</style>
+            <div className="card">
+                <h3 className="h">Book an Appointment</h3>
+                <p className="sub">Choose a support person and a convenient time.</p>
+
+                <form onSubmit={submit}>
+                    {/* ✅ New Name field */}
+                    <div className="form-row">
+                        <label className="label">Your Name (optional)</label>
+                        <input
+                            className="input"
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder="Enter your display name"
+                        />
+                    </div>
+
+                    <div className="form-row">
+                        <label className="label">Support person</label>
+                        <select
+                            className="select"
+                            value={supportPersonId}
+                            onChange={(e) => setSupportPersonId(e.target.value)}
+                        >
+                            {supportPersons.map((sp) => (
+                                <option key={sp._id} value={sp._id}>
+                                    {sp.name} ({sp.title || sp.specialization || 'Support'})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="form-row inline">
+                        <div style={{ flex: 1 }}>
+                            <label className="label">Date</label>
+                            <input
+                                className="input"
+                                type="date"
+                                value={date}
+                                onChange={(e) => setDate(e.target.value)}
+                            />
+                        </div>
+                        <div style={{ width: 160 }}>
+                            <label className="label">Time</label>
+                            <input
+                                className="input"
+                                type="time"
+                                value={time}
+                                onChange={(e) => setTime(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="form-row">
+                        <label className="label">Notes (optional)</label>
+                        <textarea
+                            className="textarea"
+                            rows={3}
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
+                            placeholder="Anything your provider should know?"
+                        />
+                    </div>
+
+                    <button className="btn" type="submit" disabled={loading}>
+                        {loading ? 'Booking…' : 'Book Appointment'}
+                    </button>
+                </form>
+            </div>
         </div>
     );
-};
-
-const styles = {
-    container: {
-        maxWidth: '600px',
-        margin: '40px auto',
-        padding: '20px',
-        borderRadius: '12px',
-        backgroundColor: '#f0f8ff',
-        boxShadow: '0 6px 20px rgba(0,0,0,0.1)',
-        fontFamily: 'Segoe UI, sans-serif',
-    },
-    heading: {
-        textAlign: 'center',
-        color: '#0077b6',
-        marginBottom: '20px',
-        fontSize: '24px',
-    },
-    form: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '15px',
-    },
-    fieldContainer: {
-        display: 'flex',
-        flexDirection: 'column',
-    },
-    label: {
-        marginBottom: '5px',
-        fontSize: '16px',
-        color: '#555',
-    },
-    input: {
-        padding: '10px',
-        borderRadius: '8px',
-        border: '1px solid #a3cde3',
-        fontSize: '16px',
-        backgroundColor: '#ffffff',
-    },
-    button: {
-        backgroundColor: '#0077b6',
-        color: 'white',
-        padding: '12px',
-        border: 'none',
-        borderRadius: '8px',
-        cursor: 'pointer',
-        fontSize: '16px',
-        fontWeight: 'bold',
-    },
-};
-
-export default AppointmentBooking;
+}

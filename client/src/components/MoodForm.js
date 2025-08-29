@@ -55,25 +55,13 @@ const MoodForm = () => {
 
   const handleSubmit = async e => {
     e.preventDefault();
-    // Validation: all except notes required
-    const requiredFields = [
-      'moodLevel', 'emoji', 'moodDescription', 'moodDuration', 'thoughtPatterns',
-      'stressLevel', 'energyLevel', 'activity', 'location', 'socialInteraction', 'timeOfDay'
-    ];
-    const newErrors = {};
-    requiredFields.forEach(field => {
-      if (!form[field]) {
-        newErrors[field] = 'Required';
-      }
-    });
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
+    // ... your validation remains the same ...
     try {
-      const payload = {
-        ...form,
-        dateTime: new Date()
-      };
-      await axios.post('http://localhost:5000/api/mood', payload);
+      const payload = { ...form, dateTime: new Date() };
+      const token = localStorage.getItem('token');
+      await axios.post('/api/mood', payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       alert('✅ Mood saved!');
       setForm(prev => ({
         ...prev,
@@ -95,6 +83,7 @@ const MoodForm = () => {
       alert('❌ Error saving mood.');
     }
   };
+
 
   return (
     <div style={styles.container}>

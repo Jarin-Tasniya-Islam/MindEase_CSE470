@@ -116,11 +116,11 @@ export default function Appointments() {
               <div style={styles.row}>
                 <label style={{ ...styles.label, flex: 1 }}>
                   Date
-                  <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={styles.input}/>
+                  <input type="date" value={date} onChange={e => setDate(e.target.value)} style={styles.input} />
                 </label>
                 <label style={{ ...styles.label, flex: 1 }}>
                   Time
-                  <input type="time" value={time} onChange={e=>setTime(e.target.value)} style={styles.input}/>
+                  <input type="time" value={time} onChange={e => setTime(e.target.value)} style={styles.input} />
                 </label>
               </div>
 
@@ -129,7 +129,7 @@ export default function Appointments() {
                 <textarea
                   rows={3}
                   value={note}
-                  onChange={e=>setNote(e.target.value)}
+                  onChange={e => setNote(e.target.value)}
                   style={{ ...styles.input, resize: 'vertical' }}
                   placeholder="What would you like to discuss?"
                 />

@@ -1,30 +1,28 @@
-// server/models/MoodEntry.js
 const mongoose = require('mongoose');
 
-const moodEntrySchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  dateTime: { type: Date, default: Date.now },
+const moodEntrySchema = new mongoose.Schema(
+  {
+    // NEW: canonical user ref for population
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 
-  // 🌈 Emotional Parameters
-  moodLevel: { type: Number, required: true },         // Mood Rating (1–5 or 1–10)
-  emoji: { type: String, required: true },             // Emoji face
-  moodDescription: { type: String },                   // Text description (e.g., anxious)
-  // moodType: { type: String },                          // Removed moodType
-  moodDuration: { type: String },                      // Duration (brief, lingering)
+    // Back-compat: keep legacy userId (string)
+    userId: { type: String },
 
-  // 🧠 Cognitive & Mental State
-  thoughtPatterns: { type: String },                   // e.g., negative self-talk, focus
-  stressLevel: { type: String },                       // Low / Medium / High
-  energyLevel: { type: String },                       // Physical/Mental energy (1–10)
-
-  // 🛠️ Contextual Parameters
-  activity: { type: String },                          // What user was doing (e.g., resting)
-  location: { type: String },                          // e.g., home, work
-  socialInteraction: { type: String },                 // Alone, with friends, etc.
-  timeOfDay: { type: String },                         // Morning, evening, etc.
-
-  // 🔖 Tags / Notes
-  notes: { type: String }
-});
+    moodLevel: { type: Number, required: true },
+    emoji: { type: String, default: '' },
+    moodDescription: { type: String, default: '' },
+    moodDuration: { type: String, default: '' },
+    thoughtPatterns: { type: String, default: '' },
+    stressLevel: { type: String, default: '' },
+    energyLevel: { type: String, default: '' },
+    activity: { type: String, default: '' },
+    location: { type: String, default: '' },
+    socialInteraction: { type: String, default: '' },
+    timeOfDay: { type: String, default: '' },
+    notes: { type: String, default: '' },
+    dateTime: { type: Date, default: Date.now }
+  },
+  { timestamps: true }
+);
 
 module.exports = mongoose.model('MoodEntry', moodEntrySchema);

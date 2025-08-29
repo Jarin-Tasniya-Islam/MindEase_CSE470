@@ -1,133 +1,243 @@
+// client/src/pages/Analytics.js
 import React, { useEffect, useMemo, useState } from 'react';
-import CalendarHeatmap from 'react-calendar-heatmap';
-import 'react-calendar-heatmap/dist/styles.css';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import DayDetailModal from '../components/DayDetailModal';
-import { fetchAnalyticsSummary, fetchDayDetails } from '../api/analytics';
+import axios from 'axios';
+import { formatDayDetails } from '../utils/dayDetailsFormatter';
+import './Analytics.css'; // keep your CSS
 
-const CSS = `
-.analytics-root { padding: 20px; }
-.analytics-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-.filters { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
-.filters label { display: block; font-size: 12px; color: #555; }
-.filters input[type="date"], .filters input[type="text"] { padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; }
-.filters button { padding: 6px 12px; border: 1px solid #666; border-radius: 6px; background: #fff; cursor: pointer; }
-.grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
-.card { border: 1px solid #eaeaea; border-radius: 10px; padding: 16px; background: #fff; }
-.card h3 { margin: 0 0 10px 0; }
-.heatmap-wrapper { overflow-x: auto; }
-`;
+// Local timezone YYYY-MM-DD (no UTC shift)
+function toLocalISO(dateLike) {
+    const d = (dateLike instanceof Date) ? dateLike : new Date(dateLike);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function fromISO(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d);
+}
+
+const levelFor = (v, max) => {
+    if (!v || v <= 0) return 0;
+    const pct = v / Math.max(1, max);
+    if (pct >= 0.75) return 4;
+    if (pct >= 0.5) return 3;
+    if (pct >= 0.25) return 2;
+    return 1;
+};
 
 export default function Analytics() {
-  const [from, setFrom] = useState(() => new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10));
-  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
-  const [tags, setTags] = useState('');
+    const [from, setFrom] = useState(() => {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() - 1);
+        return toLocalISO(d);
+    });
+    const [to, setTo] = useState(() => toLocalISO(new Date()));
 
-  const [heatmapData, setHeatmapData] = useState([]);
-  const [trendData, setTrendData] = useState([]);
-  const [dayData, setDayData] = useState(null);
-  const [open, setOpen] = useState(false);
+    const [heatmap, setHeatmap] = useState([]);
+    const [trend, setTrend] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [err, setErr] = useState('');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const { heatmap, trend } = await fetchAnalyticsSummary(from, to, tags);
-        setHeatmapData(Array.isArray(heatmap) ? heatmap : []);
-        setTrendData(Array.isArray(trend) ? trend : []);
-      } catch {
-        setHeatmapData([]);
-        setTrendData([]);
-      }
-    })();
-  }, [from, to, tags]);
+    const [selectedDate, setSelectedDate] = useState('');
+    const [dayLoading, setDayLoading] = useState(false);
+    const [dayErr, setDayErr] = useState('');
+    const [dayText, setDayText] = useState('');
 
-  const startDate = useMemo(() => new Date(from), [from]);
-  const endDate   = useMemo(() => new Date(to), [to]);
+    // 👉 Read token once per render; used for all calls
+    const token = localStorage.getItem('token');
+    const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-  const classForValue = (v) => {
-    if (!v || typeof v !== 'object' || Array.isArray(v) || v === null) return 'color-empty';
-    if (typeof v.count !== 'number') return 'color-empty';
-    if (v.count >= 5) return 'color-github-4';
-    if (v.count === 4) return 'color-github-3';
-    if (v.count === 3) return 'color-github-2';
-    if (v.count === 2) return 'color-github-1';
-    return 'color-github-0';
-  };
+    useEffect(() => {
+        let cancelled = false;
+        async function run() {
+            setLoading(true);
+            setErr('');
+            try {
+                const res = await axios.get('/api/analytics/summary', {
+                    params: { from, to },
+                    headers: authHeaders,   // 👈 attach token
+                });
+                if (cancelled) return;
+                const hm = Array.isArray(res.data?.heatmap) ? res.data.heatmap : [];
+                setHeatmap(hm);
+                setTrend(Array.isArray(res.data?.trend) ? res.data.trend : []);
+            } catch (e) {
+                console.error(e);
+                setErr(e?.response?.data?.message || e.message || 'Failed to load analytics');
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+        run();
+        return () => { cancelled = true; };
+    }, [from, to, token]); // token in deps so header updates if user re-logs in
 
-  const onDayClick = async (v) => {
-    const dateStr = v?.date || null;
-    if (!dateStr) return;
-    try {
-      const data = await fetchDayDetails(dateStr, tags);
-      setDayData(data);
-      setOpen(true);
-    } catch {
-      alert('Failed to load details for that date.');
+    async function loadDayDetails(dateStr) {
+        setSelectedDate(dateStr);
+        setDayLoading(true);
+        setDayErr('');
+        setDayText('');
+        try {
+            const res = await axios.get('/api/analytics/day', {
+                params: { date: dateStr },
+                headers: authHeaders,   // 👈 attach token
+            });
+            const txt = formatDayDetails(res.data);
+            setDayText(txt);
+        } catch (e) {
+            console.error(e);
+            setDayErr(e?.response?.data?.message || e.message || 'Failed to load day');
+        } finally {
+            setDayLoading(false);
+        }
     }
-  };
 
-  return (
-    <div className="analytics-root">
-      <style>{CSS}</style>
+    const dataMap = useMemo(() => {
+        const map = new Map();
+        let max = 0;
+        for (const item of heatmap) {
+            const dateStr = toLocalISO(item.date);
+            const value = Number(item.value ?? item.count ?? item.total ?? 0);
+            max = Math.max(max, value);
+            map.set(dateStr, { ...item, date: dateStr, value });
+        }
+        return { map, max };
+    }, [heatmap]);
 
-      <div className="analytics-header">
-        <h2>Analytics</h2>
-        <div className="filters">
-          <div>
-            <label>From</label>
-            <input type="date" value={from} onChange={(e)=>setFrom(e.target.value)} />
-          </div>
-          <div>
-            <label>To</label>
-            <input type="date" value={to} onChange={(e)=>setTo(e.target.value)} />
-          </div>
-          <div>
-            <label>Emotion Tags (CSV)</label>
-            <input type="text" placeholder="e.g., stress,exam" value={tags} onChange={(e)=>setTags(e.target.value)} />
-          </div>
-          <button onClick={()=>{/* state already bound; this is just a UX button */}}>Apply</button>
+    const cells = useMemo(() => {
+        const start = fromISO(from);
+        const end = fromISO(to);
+        const startW = new Date(start);
+        const day = startW.getDay();
+        const deltaToMon = (day + 6) % 7;
+        startW.setDate(startW.getDate() - deltaToMon);
+
+        const days = [];
+        for (let d = new Date(startW); d <= end; d.setDate(d.getDate() + 1)) {
+            const iso = toLocalISO(d);
+            const m = dataMap.map.get(iso);
+            days.push({
+                date: iso,
+                inRange: (d >= start && d <= end),
+                info: m || null
+            });
+        }
+        return days;
+    }, [from, to, dataMap]);
+
+    const monthLabels = useMemo(() => {
+        const labels = [];
+        let lastMonth = -1;
+        cells.forEach((c, idx) => {
+            const m = fromISO(c.date).getMonth();
+            if (m !== lastMonth) {
+                labels.push({
+                    index: idx,
+                    month: new Date(fromISO(c.date)).toLocaleString(undefined, { month: 'short' })
+                });
+                lastMonth = m;
+            }
+        });
+        return labels;
+    }, [cells]);
+
+    return (
+        <div className="analytics-page">
+            <div className="controls">
+                <div className="ctrl">
+                    <label>From</label>
+                    <input type="date" value={from} onChange={e => setFrom(e.target.value)} />
+                </div>
+                <div className="ctrl">
+                    <label>To</label>
+                    <input type="date" value={to} onChange={e => setTo(e.target.value)} />
+                </div>
+                <button className="ghost" onClick={() => {
+                    const d = new Date();
+                    setTo(toLocalISO(d));
+                    d.setFullYear(d.getFullYear() - 1);
+                    setFrom(toLocalISO(d));
+                }}>This Year</button>
+                <button className="ghost" onClick={() => {
+                    const d = new Date();
+                    setTo(toLocalISO(d));
+                    d.setDate(d.getDate() - 89);
+                    setFrom(toLocalISO(d));
+                }}>Last 90 Days</button>
+            </div>
+
+            <h2>Emotion Calendar</h2>
+
+            {loading ? <div className="loading">Loading…</div> : (
+                <>
+                    {!!err && <div className="error">{err}</div>}
+
+                    <div className="months-row">
+                        {monthLabels.map(m => (
+                            <div key={m.index} className="month-label" style={{ gridColumnStart: m.index + 1 }}>
+                                {m.month}
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="heatmap">
+                        {cells.map((c, i) => {
+                            const value = c.info?.value || 0;
+                            const level = levelFor(value, dataMap.max);
+                            const counts = c.info?.counts || {};
+                            const title = [
+                                new Date(fromISO(c.date)).toLocaleDateString(),
+                                `moods: ${counts.moods ?? 0}`,
+                                `journals: ${counts.journals ?? 0}`,
+                                `self-care: ${counts.selfCare ?? 0}`,
+                                `appointments: ${counts.appointments ?? 0}`
+                            ].join('\n');
+
+                            const selected = selectedDate === c.date;
+                            return (
+                                <button
+                                    key={c.date + '_' + i}
+                                    className={`cell lvl-${level} ${selected ? 'selected' : ''} ${c.inRange ? '' : 'dim'}`}
+                                    title={title}
+                                    aria-label={title}
+                                    onClick={() => { if (c.inRange) loadDayDetails(c.date); }}
+                                />
+                            );
+                        })}
+                    </div>
+
+                    <p className="subtle">Click a day to see mood logs, journals, self-care, and appointments.</p>
+                </>
+            )}
+
+            {selectedDate && (
+                <div className="card">
+                    <div className="detail-head">
+                        <h4>Day Details — {new Date(fromISO(selectedDate)).toLocaleDateString()}</h4>
+                        <div className="detail-actions">
+                            <button className="ghost" onClick={() => {
+                                setSelectedDate('');
+                                setDayText('');
+                                setDayErr('');
+                            }}>Clear</button>
+                            <button onClick={() => {
+                                const blob = new Blob([dayText], { type: 'text/plain;charset=utf-8' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `mindease-${selectedDate}.txt`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                            }}>Download TXT</button>
+                        </div>
+                    </div>
+                    {dayLoading ? <div className="loading">Loading day…</div> :
+                        dayErr ? <div className="error">{dayErr}</div> :
+                            <pre className="detail">{dayText || 'No data'}</pre>}
+                </div>
+            )}
         </div>
-      </div>
-
-      <div className="grid">
-        <div className="card">
-          <h3>Emotion Calendar</h3>
-          <div className="heatmap-wrapper">
-            <CalendarHeatmap
-              startDate={startDate}
-              endDate={endDate}
-              values={Array.isArray(heatmapData) ? heatmapData : []}
-              classForValue={classForValue}
-              showWeekdayLabels
-              onClick={onDayClick}
-              tooltipDataAttrs={(v) => {
-                if (!v || typeof v !== 'object' || !v.date) return { 'data-tip': 'No data' };
-                return { 'data-tip': `${v.date}: ${typeof v.count === 'number' ? v.count : 0} mood logs` };
-              }}
-            />
-          </div>
-          <p style={{ color: '#666', marginTop: 8 }}>
-            Click a day to see mood logs, journal entries, and self‑care tasks.
-          </p>
-        </div>
-
-        <div className="card">
-          <h3>Mood Trend</h3>
-          <div style={{ width: '100%', height: 280 }}>
-            <ResponsiveContainer>
-              <LineChart data={Array.isArray(trendData) ? trendData : []}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis domain={[0, 10]} />
-                <Tooltip />
-                <Line type="monotone" dataKey="avgMood" stroke="#8884d8" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      <DayDetailModal open={open} onClose={()=>setOpen(false)} data={dayData} />
-    </div>
-  );
+    );
 }

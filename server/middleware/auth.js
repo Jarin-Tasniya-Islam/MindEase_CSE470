@@ -1,17 +1,23 @@
-// server/middleware/auth.js
 const jwt = require('jsonwebtoken');
 
-module.exports = function auth(req, res, next) {
+module.exports = function (req, res, next) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+
+  // Debug logging (dev only)
   try {
-    const header = req.headers.authorization || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-    if (!token) return res.status(401).json({ message: 'No token, authorization denied' });
+    if (!token) {
+      console.warn('[auth] No token provided for', req.method, req.originalUrl);
+      return res.status(401).json({ message: 'No token provided' });
+    }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // Expect your login to sign: { id: user._id, role: user.role }
-    req.user = { id: decoded.id, role: decoded.role };
+    req.user = { id: decoded.id, role: decoded.role }; // ✅ role available on req.user
+    // minimal log showing authenticated user
+    console.log(`[auth] user ${req.user.id} (${req.user.role}) authenticated for ${req.method} ${req.originalUrl}`);
     next();
-  } catch (err) {
-    return res.status(401).json({ message: 'Token is not valid' });
+  } catch (e) {
+    console.warn('[auth] token invalid/expired for', req.method, req.originalUrl, '-', e.message);
+    return res.status(401).json({ message: 'Invalid or expired token' });
   }
 };

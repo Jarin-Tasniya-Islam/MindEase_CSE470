@@ -1,8 +1,11 @@
 // client/src/App.js
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import AdminDashboard from './components/AdminDashboard';
+import AdminRoute from './components/AdminRoute';
+import AdminModeration from './components/Admin/AdminModeration';
+import AdminAppointments from './components/Admin/AdminAppointments';
 
-// Components
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
 import MoodForm from './components/MoodForm';
@@ -10,22 +13,21 @@ import Navbar from './components/Navbar';
 import Profile from './components/Profile';
 import JournalForm from './components/JournalForm';
 import SelfCare from './components/SelfCare';
-import SOSPlan from './components/SOSPlan'; // ✅ SOS Page
-import EmergencyButton from './components/EmergencyButton'; // ✅ Floating SOS Button
-import Analytics from './pages/Analytics';
-import AppointmentBooking from './components/Appointments/AppointmentBooking'; // ✅ Booking page
-import AppointmentList from './components/Appointments/AppointmentList';       // ✅ My Appointments page
+import SOSPlan from './components/SOSPlan';
+import EmergencyButton from './components/EmergencyButton';
 
-// Layout with conditional Navbar
+import AppointmentBooking from './components/Appointments/AppointmentBooking';
+import AppointmentCalendar from './pages/AppointmentCalendar';
+import Analytics from './pages/Analytics';
+
 const Layout = ({ children }) => {
   const location = useLocation();
-  const hideNavbar =
-    location.pathname === '/' || location.pathname === '/register';
+  const hideNavbar = location.pathname === '/' || location.pathname === '/register';
   return (
     <>
       {!hideNavbar && <Navbar />}
       {children}
-      {!hideNavbar && <EmergencyButton />} {/* ✅ Show floating SOS button */}
+      {!hideNavbar && <EmergencyButton />}
     </>
   );
 };
@@ -35,21 +37,23 @@ function App() {
     <Router>
       <Layout>
         <Routes>
-          {/* Auth Routes */}
           <Route path="/" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
-          {/* Feature Routes */}
+          <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+          <Route path="/admin/moderation" element={<AdminModeration />} />
+          <Route path="/admin/appointments" element={<AdminAppointments />} />
+
           <Route path="/mood" element={<MoodForm />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/journal" element={<JournalForm />} />
           <Route path="/selfcare" element={<SelfCare />} />
-          <Route path="/sos" element={<SOSPlan />} /> {/* ✅ SOS Route */}
+          <Route path="/sos" element={<SOSPlan />} />
           <Route path="/analytics" element={<Analytics />} />
 
-          {/* ✅ Appointment Routes */}
+          {/* Appointments */}
           <Route path="/appointments" element={<AppointmentBooking />} />
-          <Route path="/my-appointments" element={<AppointmentList />} />
+          <Route path="/appointments/calendar" element={<AppointmentCalendar />} />
         </Routes>
       </Layout>
     </Router>

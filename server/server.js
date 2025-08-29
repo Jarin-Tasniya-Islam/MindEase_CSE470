@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
+const adminRoutes = require('./routes/adminRoutes');
+const cron = require('node-cron');
+const createNotification = require('./utils/createNotification');
 
 // Load environment variables
 dotenv.config();
@@ -13,6 +16,7 @@ connectDB();
 const app = express();
 
 // Middleware
+app.use('/api/admin', adminRoutes);
 app.use(cors());
 app.use(express.json()); // Parses incoming JSON requests
 
@@ -34,7 +38,9 @@ app.use('/api/notifications', notificationRoutes);
 
 // 🗓️ Appointments API
 const appointmentRoutes = require('./routes/appointmentRoutes');
-app.use('/api/appointments', appointmentRoutes);
+
+app.use('/api/appointments', appointmentRoutes); // <-- required mount
+
 
 // Start server
 const PORT = process.env.PORT || 5000;
@@ -43,52 +49,46 @@ app.listen(PORT, () => {
 });
 
 // 🔁 Daily Reminder System for missing mood, journal, self-care, and upcoming appointments
-const cron = require('node-cron');
 const User = require('./models/User');
 const MoodEntry = require('./models/MoodEntry');
 const JournalEntry = require('./models/JournalEntry');
 const SelfCareTask = require('./models/SelfCareTask');
 const Appointment = require('./models/Appointment');
-const createNotification = require('./utils/createNotification');
 
 // ⏰ Run every day at 10:00 AM
 cron.schedule('0 10 * * *', async () => {
-  console.log('⏰ Running daily reminder check');
+  console.log('⏰ Running daily reminders');
 
   const users = await User.find();
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const start = new Date(today.setHours(0, 0, 0, 0));
+  const end = new Date(today.setHours(23, 59, 59, 999));
 
   for (const user of users) {
     const uid = user._id;
 
     // Mood
-    const moodToday = await MoodEntry.findOne({ user: uid, createdAt: { $gte: today } });
-    if (!moodToday) {
-      await createNotification(uid, 'mood', 'You haven’t tracked your mood today.');
+    const mood = await MoodEntry.findOne({ user: uid, createdAt: { $gte: start, $lte: end } });
+    if (!mood) {
+      await createNotification(uid, 'mood', 'Don’t forget to track your mood today.');
     }
 
     // Journal
-    const journalToday = await JournalEntry.findOne({ user: uid, createdAt: { $gte: today } });
-    if (!journalToday) {
-      await createNotification(uid, 'journal', 'Don’t forget to write in your journal today.');
+    const journal = await JournalEntry.findOne({ user: uid, createdAt: { $gte: start, $lte: end } });
+    if (!journal) {
+      await createNotification(uid, 'journal', 'Write in your journal today.');
     }
 
-    // Self-care
-    const selfCareToday = await SelfCareTask.findOne({ user: uid, createdAt: { $gte: today } });
-    if (!selfCareToday) {
-      await createNotification(uid, 'selfcare', 'Time for your self-care check-in.');
-    }
-
-    // 🗓️ Appointments today
-    const appointmentsToday = await Appointment.find({
+    // Appointments in next 24h
+    const now = new Date();
+    const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const upcoming = await Appointment.find({
       user: uid,
-      status: { $in: ['pending', 'confirmed'] },
-      date: { $gte: today, $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000) },
+      date: { $gte: now, $lt: in24h },
+      status: { $in: ['pending', 'confirmed'] }
     });
-
-    if (appointmentsToday.length > 0) {
-      await createNotification(uid, 'appointment', 'You have an appointment scheduled for today.');
+    if (upcoming.length > 0) {
+      await createNotification(uid, 'appointment', 'You have an appointment within the next 24 hours.');
     }
   }
 });
