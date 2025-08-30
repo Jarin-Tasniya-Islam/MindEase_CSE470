@@ -1,3 +1,4 @@
+/* ===== Base reset (yours) ===== */
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -10,4 +11,47 @@ body {
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+}
+
+/* ===== MindEase Theme (shared) ===== */
+:root {
+  /* header/nav + footer harmony */
+  --nav-bg: #d8ecff;       /* same as your header background */
+  --nav-border: #bcd9f5;   /* subtle divider */
+
+  /* brand blues */
+  --brand-600: #0b66c3;     /* links / accents */
+  --brand-700: #0a569f;
+  --ink-900:  #0b3954;      /* headings */
+  --ink-700:  #355b72;      /* body text */
+  --sky-25:   #eaf5ff;      /* very light blue surfaces */
+  --sky-50:   #dbeeff;
+  --line-200: #d8e6f5;      /* borders */
+
+  /* footer defaults */
+  --footer-bg: var(--nav-bg);
+  --footer-text: var(--ink-900);
+  --footer-subtext: var(--ink-700);
+  --footer-link: var(--brand-600);
+}
+
+/* Dark-mode polish (optional, auto-applies if user is in dark mode) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --footer-bg: #0e1a24;
+    --footer-text: #e6f2fb;
+    --footer-subtext: #cddfec;
+    --footer-link: #7ec0ff;
+    --line-200: #1e3346;
+  }
+}
+
+/* ===== Sticky footer layout helpers ===== */
+.site-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.site-main {
+  flex: 1; /* pushes footer to the bottom */
 }

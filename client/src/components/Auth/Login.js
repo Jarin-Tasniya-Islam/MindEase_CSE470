@@ -28,7 +28,7 @@ const Login = () => {
 
   return (
     <div style={styles.container}>
-      <h2 style={styles.heading}>Welcome Back 💙</h2>
+      <h2 style={styles.heading}>Welcome Back to MindEase 💙</h2>
       <p style={styles.subheading}>Log in to continue your wellness journey</p>
 
       <form onSubmit={handleSubmit} style={styles.form}>

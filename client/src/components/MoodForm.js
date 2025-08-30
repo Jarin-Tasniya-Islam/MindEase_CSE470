@@ -17,7 +17,6 @@ const MoodForm = () => {
     moodLevel: '',
     emoji: '',
     moodDescription: '',
-    // moodType: '',
     moodDuration: '',
     thoughtPatterns: '',
     stressLevel: '',
@@ -26,11 +25,11 @@ const MoodForm = () => {
     location: '',
     socialInteraction: '',
     timeOfDay: '',
-    notes: '',
-    // categories: ''
+    notes: ''
   });
 
   const [errors, setErrors] = useState({});
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
@@ -38,7 +37,7 @@ const MoodForm = () => {
         const decoded = jwtDecode(token);
         setForm(prev => ({ ...prev, userId: decoded.id }));
       } catch (err) {
-        console.error("Invalid token", err);
+        console.error('Invalid token', err);
       }
     }
   }, []);
@@ -53,15 +52,45 @@ const MoodForm = () => {
     setErrors({ ...errors, moodLevel: '' });
   };
 
+  // Validate all required fields (notes is optional)
+  const validate = () => {
+    const newErrors = {};
+    if (!form.moodLevel) newErrors.moodLevel = 'Mood is required';
+    if (!form.moodDescription.trim()) newErrors.moodDescription = 'Description is required';
+    if (!form.moodDuration.trim()) newErrors.moodDuration = 'Duration is required';
+    if (!form.thoughtPatterns.trim()) newErrors.thoughtPatterns = 'Thought Patterns are required';
+    if (!form.stressLevel.trim()) newErrors.stressLevel = 'Stress Level is required';
+    if (String(form.energyLevel).trim() === '') newErrors.energyLevel = 'Energy Level is required';
+    if (!form.activity.trim()) newErrors.activity = 'Activity is required';
+    if (!form.location.trim()) newErrors.location = 'Location is required';
+    if (!form.socialInteraction.trim()) newErrors.socialInteraction = 'Social is required';
+    if (!form.timeOfDay.trim()) newErrors.timeOfDay = 'Time of Day is required';
+    return newErrors;
+  };
+
   const handleSubmit = async e => {
     e.preventDefault();
-    // ... your validation remains the same ...
+
+    const newErrors = validate();
+    if (Object.keys(newErrors).length) {
+      setErrors(newErrors);
+      alert('⚠️ Please fill all required fields.');
+      return;
+    }
+
     try {
-      const payload = { ...form, dateTime: new Date() };
+      const payload = {
+        ...form,
+        energyLevel: Number(form.energyLevel), // ensure number
+        dateTime: new Date()
+      };
       const token = localStorage.getItem('token');
-      await axios.post('/api/mood', payload, {
+
+      // IMPORTANT: plural endpoint
+      await axios.post('/api/moods', payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
+
       alert('✅ Mood saved!');
       setForm(prev => ({
         ...prev,
@@ -80,10 +109,10 @@ const MoodForm = () => {
       }));
       setErrors({});
     } catch (err) {
-      alert('❌ Error saving mood.');
+      const msg = err?.response?.data?.message || err.message;
+      alert('❌ Error saving mood: ' + msg);
     }
   };
-
 
   return (
     <div style={styles.container}>
@@ -94,6 +123,7 @@ const MoodForm = () => {
         {moodOptions.map(option => (
           <button
             key={option.level}
+            type="button"
             onClick={() => handleEmojiSelect(option.level, option.emoji)}
             style={{
               ...styles.emojiButton,
@@ -106,28 +136,99 @@ const MoodForm = () => {
           </button>
         ))}
       </div>
+      {errors.moodLevel && <div style={styles.error}>{errors.moodLevel}</div>}
 
       {/* Mood Form */}
-      <form onSubmit={handleSubmit} style={styles.form}>
-        <input name="moodDescription" placeholder="Mood Description (e.g., tired, anxious)" value={form.moodDescription} onChange={handleChange} style={styles.input} />
-        {errors.moodDescription && <div style={{ color: 'red', fontSize: '13px' }}>Description is required.</div>}
-        <input name="moodDuration" placeholder="Mood Duration (brief, lingering)" value={form.moodDuration} onChange={handleChange} style={styles.input} />
-        {errors.moodDuration && <div style={{ color: 'red', fontSize: '13px' }}>Duration is required.</div>}
-        <input name="thoughtPatterns" placeholder="Thought Patterns (racing thoughts, focus...)" value={form.thoughtPatterns} onChange={handleChange} style={styles.input} />
-        {errors.thoughtPatterns && <div style={{ color: 'red', fontSize: '13px' }}>Thought Patterns are required.</div>}
-        <input name="stressLevel" placeholder="Stress Level (Low/Medium/High)" value={form.stressLevel} onChange={handleChange} style={styles.input} />
-        {errors.stressLevel && <div style={{ color: 'red', fontSize: '13px' }}>Stress Level is required.</div>}
-        <input name="energyLevel" placeholder="Energy Level (1–10)" value={form.energyLevel} onChange={handleChange} style={styles.input} />
-        {errors.energyLevel && <div style={{ color: 'red', fontSize: '13px' }}>Energy Level is required.</div>}
-        <input name="activity" placeholder="Activity (working, resting...)" value={form.activity} onChange={handleChange} style={styles.input} />
-        {errors.activity && <div style={{ color: 'red', fontSize: '13px' }}>Activity is required.</div>}
-        <input name="location" placeholder="Location (home, outdoors...)" value={form.location} onChange={handleChange} style={styles.input} />
-        {errors.location && <div style={{ color: 'red', fontSize: '13px' }}>Location is required.</div>}
-        <input name="socialInteraction" placeholder="Social (alone, family...)" value={form.socialInteraction} onChange={handleChange} style={styles.input} />
-        {errors.socialInteraction && <div style={{ color: 'red', fontSize: '13px' }}>Social is required.</div>}
-        <input name="timeOfDay" placeholder="Time of Day (morning, night...)" value={form.timeOfDay} onChange={handleChange} style={styles.input} />
-        {errors.timeOfDay && <div style={{ color: 'red', fontSize: '13px' }}>Time of Day is required.</div>}
-        <textarea name="notes" placeholder="Notes (optional)" value={form.notes} onChange={handleChange} style={{ ...styles.input, height: '80px' }} />
+      <form onSubmit={handleSubmit} style={styles.form} noValidate>
+        <input
+          name="moodDescription"
+          placeholder="Mood Description (e.g., tired, anxious)"
+          value={form.moodDescription}
+          onChange={handleChange}
+          style={styles.input}
+        />
+        {errors.moodDescription && <div style={styles.error}>{errors.moodDescription}</div>}
+
+        <input
+          name="moodDuration"
+          placeholder="Mood Duration (brief, lingering)"
+          value={form.moodDuration}
+          onChange={handleChange}
+          style={styles.input}
+        />
+        {errors.moodDuration && <div style={styles.error}>{errors.moodDuration}</div>}
+
+        <input
+          name="thoughtPatterns"
+          placeholder="Thought Patterns (racing thoughts, focus...)"
+          value={form.thoughtPatterns}
+          onChange={handleChange}
+          style={styles.input}
+        />
+        {errors.thoughtPatterns && <div style={styles.error}>{errors.thoughtPatterns}</div>}
+
+        <input
+          name="stressLevel"
+          placeholder="Stress Level (Low/Medium/High)"
+          value={form.stressLevel}
+          onChange={handleChange}
+          style={styles.input}
+        />
+        {errors.stressLevel && <div style={styles.error}>{errors.stressLevel}</div>}
+
+        <input
+          name="energyLevel"
+          placeholder="Energy Level (1–10)"
+          value={form.energyLevel}
+          onChange={handleChange}
+          style={styles.input}
+        />
+        {errors.energyLevel && <div style={styles.error}>{errors.energyLevel}</div>}
+
+        <input
+          name="activity"
+          placeholder="Activity (working, resting...)"
+          value={form.activity}
+          onChange={handleChange}
+          style={styles.input}
+        />
+        {errors.activity && <div style={styles.error}>{errors.activity}</div>}
+
+        <input
+          name="location"
+          placeholder="Location (home, outdoors...)"
+          value={form.location}
+          onChange={handleChange}
+          style={styles.input}
+        />
+        {errors.location && <div style={styles.error}>{errors.location}</div>}
+
+        <input
+          name="socialInteraction"
+          placeholder="Social (alone, family...)"
+          value={form.socialInteraction}
+          onChange={handleChange}
+          style={styles.input}
+        />
+        {errors.socialInteraction && <div style={styles.error}>{errors.socialInteraction}</div>}
+
+        <input
+          name="timeOfDay"
+          placeholder="Time of Day (morning, night...)"
+          value={form.timeOfDay}
+          onChange={handleChange}
+          style={styles.input}
+        />
+        {errors.timeOfDay && <div style={styles.error}>{errors.timeOfDay}</div>}
+
+        <textarea
+          name="notes"
+          placeholder="Notes (optional)"
+          value={form.notes}
+          onChange={handleChange}
+          style={{ ...styles.input, height: '80px' }}
+        />
+
         <button type="submit" style={styles.button}>Save Mood</button>
       </form>
     </div>
@@ -192,6 +293,11 @@ const styles = {
     cursor: 'pointer',
     fontWeight: 'bold',
     marginTop: '10px'
+  },
+  error: {
+    color: 'red',
+    fontSize: '13px',
+    textAlign: 'left'
   }
 };
 

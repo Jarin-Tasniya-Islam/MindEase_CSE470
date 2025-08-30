@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { formatDayDetails } from '../utils/dayDetailsFormatter';
-import './Analytics.css'; // keep your CSS
+import './Analytics.css';
 
 // Local timezone YYYY-MM-DD (no UTC shift)
 function toLocalISO(dateLike) {
@@ -14,41 +14,51 @@ function toLocalISO(dateLike) {
 }
 
 function fromISO(dateStr) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    return new Date(y, m - 1, d);
+    const [y, m, d] = (dateStr || '').split('-').map(Number);
+    return new Date(y, m - 1, d || 1);
 }
 
-const levelFor = (v, max) => {
-    if (!v || v <= 0) return 0;
-    const pct = v / Math.max(1, max);
-    if (pct >= 0.75) return 4;
-    if (pct >= 0.5) return 3;
-    if (pct >= 0.25) return 2;
-    return 1;
-};
+const monthName = (d) =>
+    d.toLocaleString(undefined, { month: 'long', year: 'numeric' });
 
 export default function Analytics() {
-    const [from, setFrom] = useState(() => {
+    // calendar anchor = the first day of the current (visible) month
+    const [anchor, setAnchor] = useState(() => {
         const d = new Date();
-        d.setFullYear(d.getFullYear() - 1);
+        d.setDate(1);
         return toLocalISO(d);
     });
-    const [to, setTo] = useState(() => toLocalISO(new Date()));
 
-    const [heatmap, setHeatmap] = useState([]);
-    const [trend, setTrend] = useState([]);
+    // derived range for back-end (one month window)
+    const { rangeFrom, rangeTo, firstDay, lastDay } = useMemo(() => {
+        const first = fromISO(anchor);        // 1st of month
+        const last = new Date(first);
+        last.setMonth(last.getMonth() + 1);
+        last.setDate(0);                      // last day of month
+        return {
+            rangeFrom: toLocalISO(first),
+            rangeTo: toLocalISO(last),
+            firstDay: first,
+            lastDay: last
+        };
+    }, [anchor]);
+
+    // data
+    const [summary, setSummary] = useState([]); // array of {date, counts:{moods,journals,selfCare,appointments}, value}
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState('');
 
+    // day details
     const [selectedDate, setSelectedDate] = useState('');
     const [dayLoading, setDayLoading] = useState(false);
     const [dayErr, setDayErr] = useState('');
     const [dayText, setDayText] = useState('');
 
-    // 👉 Read token once per render; used for all calls
+    // auth header
     const token = localStorage.getItem('token');
     const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined;
 
+    // fetch one-month summary
     useEffect(() => {
         let cancelled = false;
         async function run() {
@@ -56,15 +66,19 @@ export default function Analytics() {
             setErr('');
             try {
                 const res = await axios.get('/api/analytics/summary', {
-                    params: { from, to },
-                    headers: authHeaders,   // 👈 attach token
+                    params: { from: rangeFrom, to: rangeTo },
+                    headers: authHeaders
                 });
                 if (cancelled) return;
                 const hm = Array.isArray(res.data?.heatmap) ? res.data.heatmap : [];
-                setHeatmap(hm);
-                setTrend(Array.isArray(res.data?.trend) ? res.data.trend : []);
+                setSummary(
+                    hm.map(it => ([
+                        { date: toLocalISO(it.date), counts: it.counts || {}, value: Number(it.value ?? it.count ?? 0) }
+                    ][0]))
+                );
             } catch (e) {
                 console.error(e);
+                setSummary([]);
                 setErr(e?.response?.data?.message || e.message || 'Failed to load analytics');
             } finally {
                 if (!cancelled) setLoading(false);
@@ -72,17 +86,47 @@ export default function Analytics() {
         }
         run();
         return () => { cancelled = true; };
-    }, [from, to, token]); // token in deps so header updates if user re-logs in
+    }, [rangeFrom, rangeTo, token]);
 
-    async function loadDayDetails(dateStr) {
-        setSelectedDate(dateStr);
+    // index data by date
+    const map = useMemo(() => {
+        const m = new Map();
+        for (const d of summary) m.set(d.date, d);
+        return m;
+    }, [summary]);
+
+    // build 6x7 calendar grid (starts on Sunday)
+    const cells = useMemo(() => {
+        const start = new Date(firstDay);
+        const dow = start.getDay();         // 0..6 (Sun..Sat)
+        start.setDate(start.getDate() - dow);
+
+        const days = [];
+        for (let i = 0; i < 42; i++) {
+            const d = new Date(start);
+            d.setDate(start.getDate() + i);
+            const iso = toLocalISO(d);
+            const inMonth = (d.getMonth() === firstDay.getMonth());
+            days.push({
+                iso,
+                date: d,
+                inMonth,
+                info: map.get(iso) || { counts: {}, value: 0 }
+            });
+        }
+        return days;
+    }, [firstDay, map]);
+
+    // load one day details
+    async function loadDayDetails(iso) {
+        setSelectedDate(iso);
         setDayLoading(true);
         setDayErr('');
         setDayText('');
         try {
             const res = await axios.get('/api/analytics/day', {
-                params: { date: dateStr },
-                headers: authHeaders,   // 👈 attach token
+                params: { date: iso },
+                headers: authHeaders
             });
             const txt = formatDayDetails(res.data);
             setDayText(txt);
@@ -94,143 +138,95 @@ export default function Analytics() {
         }
     }
 
-    const dataMap = useMemo(() => {
-        const map = new Map();
-        let max = 0;
-        for (const item of heatmap) {
-            const dateStr = toLocalISO(item.date);
-            const value = Number(item.value ?? item.count ?? item.total ?? 0);
-            max = Math.max(max, value);
-            map.set(dateStr, { ...item, date: dateStr, value });
-        }
-        return { map, max };
-    }, [heatmap]);
-
-    const cells = useMemo(() => {
-        const start = fromISO(from);
-        const end = fromISO(to);
-        const startW = new Date(start);
-        const day = startW.getDay();
-        const deltaToMon = (day + 6) % 7;
-        startW.setDate(startW.getDate() - deltaToMon);
-
-        const days = [];
-        for (let d = new Date(startW); d <= end; d.setDate(d.getDate() + 1)) {
-            const iso = toLocalISO(d);
-            const m = dataMap.map.get(iso);
-            days.push({
-                date: iso,
-                inRange: (d >= start && d <= end),
-                info: m || null
-            });
-        }
-        return days;
-    }, [from, to, dataMap]);
-
-    const monthLabels = useMemo(() => {
-        const labels = [];
-        let lastMonth = -1;
-        cells.forEach((c, idx) => {
-            const m = fromISO(c.date).getMonth();
-            if (m !== lastMonth) {
-                labels.push({
-                    index: idx,
-                    month: new Date(fromISO(c.date)).toLocaleString(undefined, { month: 'short' })
-                });
-                lastMonth = m;
-            }
-        });
-        return labels;
-    }, [cells]);
+    // month nav
+    const prevMonth = () => {
+        const d = new Date(firstDay);
+        d.setMonth(d.getMonth() - 1);
+        d.setDate(1);
+        setAnchor(toLocalISO(d));
+    };
+    const nextMonth = () => {
+        const d = new Date(firstDay);
+        d.setMonth(d.getMonth() + 1);
+        d.setDate(1);
+        setAnchor(toLocalISO(d));
+    };
 
     return (
         <div className="analytics-page">
-            <div className="controls">
-                <div className="ctrl">
-                    <label>From</label>
-                    <input type="date" value={from} onChange={e => setFrom(e.target.value)} />
-                </div>
-                <div className="ctrl">
-                    <label>To</label>
-                    <input type="date" value={to} onChange={e => setTo(e.target.value)} />
-                </div>
-                <button className="ghost" onClick={() => {
-                    const d = new Date();
-                    setTo(toLocalISO(d));
-                    d.setFullYear(d.getFullYear() - 1);
-                    setFrom(toLocalISO(d));
-                }}>This Year</button>
-                <button className="ghost" onClick={() => {
-                    const d = new Date();
-                    setTo(toLocalISO(d));
-                    d.setDate(d.getDate() - 89);
-                    setFrom(toLocalISO(d));
-                }}>Last 90 Days</button>
+            <div className="cal-header">
+                <button className="nav" onClick={prevMonth} aria-label="Previous month">‹</button>
+                <h2 className="title">{monthName(firstDay)}</h2>
+                <button className="nav" onClick={nextMonth} aria-label="Next month">›</button>
             </div>
 
-            <h2>Emotion Calendar</h2>
+            <div className="subheader">
+                <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+            </div>
 
-            {loading ? <div className="loading">Loading…</div> : (
-                <>
-                    {!!err && <div className="error">{err}</div>}
+            {loading ? <div className="loading">Loading…</div> :
+                err ? <div className="error">{err}</div> : (
+                    <div className="month-grid">
+                        {cells.map((c) => {
+                            const { moods = 0, journals = 0, selfCare = 0, appointments = 0 } = c.info.counts || {};
+                            const total = (moods + journals + selfCare + appointments) || 0;
 
-                    <div className="months-row">
-                        {monthLabels.map(m => (
-                            <div key={m.index} className="month-label" style={{ gridColumnStart: m.index + 1 }}>
-                                {m.month}
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="heatmap">
-                        {cells.map((c, i) => {
-                            const value = c.info?.value || 0;
-                            const level = levelFor(value, dataMap.max);
-                            const counts = c.info?.counts || {};
-                            const title = [
-                                new Date(fromISO(c.date)).toLocaleDateString(),
-                                `moods: ${counts.moods ?? 0}`,
-                                `journals: ${counts.journals ?? 0}`,
-                                `self-care: ${counts.selfCare ?? 0}`,
-                                `appointments: ${counts.appointments ?? 0}`
-                            ].join('\n');
-
-                            const selected = selectedDate === c.date;
                             return (
                                 <button
-                                    key={c.date + '_' + i}
-                                    className={`cell lvl-${level} ${selected ? 'selected' : ''} ${c.inRange ? '' : 'dim'}`}
-                                    title={title}
-                                    aria-label={title}
-                                    onClick={() => { if (c.inRange) loadDayDetails(c.date); }}
-                                />
+                                    key={c.iso}
+                                    className={`day ${c.inMonth ? '' : 'muted'} ${selectedDate === c.iso ? 'selected' : ''}`}
+                                    onClick={() => loadDayDetails(c.iso)}
+                                    title={`${c.date.toLocaleDateString()}\nMoods: ${moods}\nJournals: ${journals}\nSelf-care: ${selfCare}\nAppointments: ${appointments}`}
+                                >
+                                    <div className="day-num">{c.date.getDate()}</div>
+
+                                    {/* Appointment chip(s) */}
+                                    {appointments > 0 && (
+                                        <div
+                                            className="chip chip-appt"
+                                            aria-label={`${appointments} ${appointments === 1 ? 'appointment' : 'appointments'}`}
+                                        >
+                                            {appointments === 1 ? 'Appointment' : 'Appointments'} · {appointments}
+                                        </div>
+                                    )}
+
+                                    {/* Stacked tiny chips for quick glance */}
+                                    <div className="chip-row">
+                                        {moods > 0 && <span className="dot mood" title={`${moods} mood logs`} />}
+                                        {journals > 0 && <span className="dot journal" title={`${journals} journals`} />}
+                                        {selfCare > 0 && <span className="dot selfcare" title={`${selfCare} self-care`} />}
+                                        {appointments > 0 && <span className="dot appt" title={`${appointments} appointments`} />}
+                                        {total === 0 && <span className="dot none" title="No data" />}
+                                    </div>
+                                </button>
                             );
                         })}
                     </div>
+                )
+            }
 
-                    <p className="subtle">Click a day to see mood logs, journals, self-care, and appointments.</p>
-                </>
-            )}
-
+            {/* Day detail panel */}
             {selectedDate && (
                 <div className="card">
                     <div className="detail-head">
-                        <h4>Day Details — {new Date(fromISO(selectedDate)).toLocaleDateString()}</h4>
+                        <h4>Day Details — {fromISO(selectedDate).toLocaleDateString()}</h4>
                         <div className="detail-actions">
-                            <button className="ghost" onClick={() => {
-                                setSelectedDate('');
-                                setDayText('');
-                                setDayErr('');
-                            }}>Clear</button>
-                            <button onClick={() => {
-                                const blob = new Blob([dayText], { type: 'text/plain;charset=utf-8' });
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.href = url;
-                                a.download = `mindease-${selectedDate}.txt`;
-                                a.click();
-                                URL.revokeObjectURL(url);
-                            }}>Download TXT</button>
+                            <button className="ghost" onClick={() => { setSelectedDate(''); setDayText(''); setDayErr(''); }}>
+                                Clear
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const blob = new Blob([dayText || 'No data'], { type: 'text/plain;charset=utf-8' });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `mindease-${selectedDate}.txt`;
+                                    a.click();
+                                    URL.revokeObjectURL(url);
+                                }}
+                            >
+                                Download TXT
+                            </button>
                         </div>
                     </div>
                     {dayLoading ? <div className="loading">Loading day…</div> :

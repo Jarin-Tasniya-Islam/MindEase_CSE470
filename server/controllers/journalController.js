@@ -1,4 +1,5 @@
 const JournalEntry = require('../models/JournalEntry');
+const Notification = require('../models/Notification'); // ⬅️ needed to clear reminders
 const createNotification = require('../utils/createNotification');
 
 // CREATE a journal entry
@@ -12,8 +13,10 @@ exports.createEntry = async (req, res) => {
       return res.status(400).json({ message: 'Missing user identification' });
     }
 
+    const normalizedUserId = userIdFromToken || legacyUserId;
+
     const entry = await JournalEntry.create({
-      user: userIdFromToken || legacyUserId,   // works for ObjectId or string (string will fail if not ObjectId; so prefer token)
+      user: normalizedUserId,              // your primary ref
       userId: legacyUserId || userIdFromToken, // keep legacy string if you still use it elsewhere
       content: req.body.content,
       entryType: req.body.entryType || '',
@@ -23,8 +26,20 @@ exports.createEntry = async (req, res) => {
       date: req.body.date || new Date()
     });
 
-    // Trigger notification (use the normalized user id)
-    await createNotification(entry.user, 'journal', '📝 Congratulations, You have completed todays journal');
+    // 🧹 VANISH today’s journal REMINDER(s)
+    // (relies on Notification model having fields: userId, type, isReminder)
+    await Notification.deleteMany({
+      userId: normalizedUserId,
+      type: 'journal',
+      isReminder: true
+    });
+
+    // ✅ Add completion notification (one-shot update)
+    await createNotification(
+      normalizedUserId,
+      'journal',
+      '✅ Journal completed! Great job!'
+    );
 
     res.status(201).json({ message: 'Journal saved', entry });
   } catch (err) {

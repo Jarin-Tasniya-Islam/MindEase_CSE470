@@ -1,11 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const { createMoodEntry, getMoodEntries } = require('../controllers/moodController');
+const moodController = require('../controllers/moodController');
 
-router.post('/', auth, createMoodEntry);
-// Split optional param into two explicit routes to avoid path-to-regexp errors
-router.get('/', auth, getMoodEntries);
-router.get('/:userId', auth, getMoodEntries);
+// Use the available create handler:
+// prefer `create`, else `createMoodEntry`, else `saveMood`
+const createHandler =
+  moodController.create ||
+  moodController.createMoodEntry ||
+  moodController.saveMood;
+
+router.post('/', auth, createHandler); // POST /api/moods
+
+// (optional) list moods
+// router.get('/:userId?', auth, moodController.getMoodEntries);
 
 module.exports = router;

@@ -20,15 +20,26 @@ import AppointmentBooking from './components/Appointments/AppointmentBooking';
 import AppointmentCalendar from './pages/AppointmentCalendar';
 import Analytics from './pages/Analytics';
 
+// ⬇️ Footer
+import Footer from './components/Footer';
+
 const Layout = ({ children }) => {
   const location = useLocation();
   const hideNavbar = location.pathname === '/' || location.pathname === '/register';
+  const hideFooter = location.pathname === '/' || location.pathname === '/register'; // 👈 new
+
   return (
-    <>
+    <div className="site-shell">   {/* wrapper for sticky footer */}
       {!hideNavbar && <Navbar />}
-      {children}
+
+      {/* main grows to push footer down */}
+      <main className="site-main">{children}</main>
+
       {!hideNavbar && <EmergencyButton />}
-    </>
+
+      {/* Footer hidden on login/register */}
+      {!hideFooter && <Footer />}
+    </div>
   );
 };
 

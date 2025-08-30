@@ -1,4 +1,5 @@
 const SelfCareTask = require('../models/SelfCareTask');
+const Notification = require('../models/Notification'); // ⬅️ needed to clear reminders
 const createNotification = require('../utils/createNotification');
 
 // ✅ Log today's self-care task for authenticated user
@@ -13,8 +14,19 @@ exports.markTaskCompleted = async (req, res) => {
       completed: true
     });
 
-    // Optional: Notify after completion
-    await createNotification(userId, 'selfcare', '🛡️ Great job completing your self-care task!');
+    // 🧹 VANISH today’s self-care REMINDER(s)
+    await Notification.deleteMany({
+      userId,
+      type: 'selfcare',
+      isReminder: true
+    });
+
+    // ✅ Add completion notification
+    await createNotification(
+      userId,
+      'selfcare',
+      '✅ Self-care session completed. 🌟'
+    );
 
     res.status(201).json({ message: 'Task logged successfully' });
   } catch (err) {
@@ -39,6 +51,6 @@ exports.getTodayTasks = async (req, res) => {
 
     res.status(200).json(tasks);
   } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch today\'s tasks', error: err.message });
+    res.status(500).json({ message: 'Failed to fetch todays tasks', error: err.message });
   }
 };

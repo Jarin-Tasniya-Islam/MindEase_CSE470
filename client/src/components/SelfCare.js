@@ -127,6 +127,27 @@ const SelfCare = () => {
     }
   };
 
+  const handleCompleteActivity = async (activityId) => {
+    try {
+      const response = await fetch(`/api/selfcare/${activityId}/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+        },
+      });
+
+      if (response.ok) {
+        console.log('Activity saved successfully');
+        // Refresh the list or update the UI
+      } else {
+        console.error('Failed to save activity:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error saving activity:', error);
+    }
+  };
+
   return (
     <div style={styles.container}>
       <h2 style={styles.heading}>🌿 Self-Care Flow</h2>
